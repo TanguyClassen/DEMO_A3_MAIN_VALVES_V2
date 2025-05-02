@@ -1,0 +1,17 @@
+% Synchronize timetables
+tt1 = dataChanExact{1};
+tt2 = dataChanExact{2};
+mergedData = synchronize(tt1, tt2, 'union', 'linear');
+
+% Rename variables (optional)
+mergedData.Properties.VariableNames = ["TankPressureEthanol", "TankWeightEthanol"];
+
+% Add Time as a regular column
+mergedData.Time = mergedData.Properties.RowTimes;
+mergedData = movevars(mergedData, 'Time', 'Before', 1);
+
+% Convert to table
+mergedTable = timetable2table(mergedData);
+
+% Write to Excel
+writetable(mergedTable, 'merged_data.xlsx');

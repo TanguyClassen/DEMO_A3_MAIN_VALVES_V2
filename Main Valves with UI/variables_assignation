@@ -1,0 +1,10 @@
+| Variable Name | Type | Direction | Description |
+|:--------------|:-----|:-----------|:------------|
+| `b_Homing_E` | `BOOL` | ➡️ Output (PLC → Arduino) | Request homing mode (calibration) |
+| `w_Main_EV` | `INT` | ➡️ Output | Target valve position (0-100%) |
+| `b_SingleStep_E` | `BOOL` | ➡️ Output | Request single step fine close during calibration |
+| `b_Reboot_Valve_E` | `BOOL` | ➡️ Output | Request reboot/reset of Ethanol valve |
+| `status_epos_e` | `INT` | ⬅️ Input (Arduino → PLC) | Actual current position (feedback %) |
+| `s_server_status` | `STRING` | ⬅️ Input | Global system (server) status message |
+| `s_system_message_e` | `STRING` | ⬅️ Input | Ethanol valve live status message |
+| `s_system_message_o` | `STRING` | ⬅️ Input | N₂O valve live status message |

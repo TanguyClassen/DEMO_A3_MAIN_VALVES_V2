@@ -1,0 +1,81 @@
+# ✅ OPC UA to Arduino TCP Bridge (macOS, updated for Codesys server)
+# Connects to WAGO OPC UA server and relays variables to Arduino over TCP
+
+import socket
+import json
+import base64
+import time
+from opcua import Client, ua
+
+# === OPC UA Setup ===
+OPCUA_SERVER_URL = "opc.tcp://192.168.1.17:4840"
+client = Client(OPCUA_SERVER_URL)
+client.set_user("")  # Optional: add credentials here if needed
+client.set_password("")
+client.connect()
+print("✅ Connected to OPC UA server")
+
+# === NodeId declarations ===
+node_b_Homing_E       = ua.NodeId(base64.b64decode("AQAAAKbhKnGK9zM6o+Y1NI3mYGeQ7iJ7heYzOovcCHuE6i5ztsZA"), 5, ua.NodeIdType.ByteString)
+node_i_status_epos_E  = ua.NodeId(base64.b64decode("AQAAAKbhKnGK9zM6o+Y1NI3mYGeQ7iJ7heYzOoDcE2CI9zVntuYwe5rcBRQ="), 5, ua.NodeIdType.ByteString)
+node_w_main_E         = ua.NodeId(base64.b64decode("AQAAAKbhKnGK9zM6o+Y1NI3mYGeQ7iJ7heYzOp7cDXWA7QVCtsZA"), 5, ua.NodeIdType.ByteString)
+node_b_SingleStep_E   = ua.NodeId(base64.b64decode("AQAAAKbhKnGK9zM6o+Y1NI3mYGeQ7iJ7heYzOovcE32H5CxxuvclZLbGQA=="), 5, ua.NodeIdType.ByteString)  # <- Replace with actual Base64 NodeId
+
+# === TCP server to talk to Arduino ===
+HOST = "0.0.0.0"
+PORT = 4840
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind((HOST, PORT))
+sock.listen(1)
+print(f"📡 Listening for Arduino on TCP {PORT}...")
+
+conn, addr = sock.accept()
+print(f"✅ Arduino connected from {addr}")
+
+try:
+    while True:
+        # 1. Read from OPC UA
+        try:
+            homing = client.get_node(node_b_Homing_E).get_value()
+            main_ev = client.get_node(node_w_main_E).get_value()
+            single_step = client.get_node(node_b_SingleStep_E).get_value()
+        except Exception as e:
+            print(f"⚠️ OPC UA read failed: {e}")
+            homing, main_ev, single_step = 0, 0, False
+
+        # 2. Send to Arduino
+        try:
+            data = json.dumps({
+                "b_Homing_E": homing,
+                "w_Main_EV": main_ev,
+                "b_SingleStep_E": single_step
+            }) + "\n"
+            conn.sendall(data.encode())
+        except Exception as e:
+            print(f"⚠️ TCP send failed: {e}")
+
+        # 3. Read feedback from Arduino (non-blocking)
+        conn.settimeout(0.1)
+        try:
+            feedback = conn.recv(256).decode().strip()
+            for line in feedback.splitlines():
+                try:
+                    msg = json.loads(line)
+                    if "status_epos_e" in msg:
+                        val = int(msg["status_epos_e"])
+                        client.get_node(node_i_status_epos_E).set_value(val)
+                        print(f"📥 status_epos_e: {val}")
+                except Exception as e:
+                    print(f"⚠️ JSON decode error: {e}")
+        except socket.timeout:
+            pass
+
+        time.sleep(0.2)
+
+except KeyboardInterrupt:
+    print("🛑 Shutting down")
+    conn.close()
+    sock.close()
+    client.disconnect()
+

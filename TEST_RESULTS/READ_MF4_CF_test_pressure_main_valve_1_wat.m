@@ -1,17 +1,24 @@
-% List of mf4 files
+% ----------------------------
+% Parameters (easy to modify)
+% ----------------------------
+
 fileNames = {
     'CF_test_pressure_main_valve_1.mf4'
     'CF_test_pressure_main_valve_2.mf4'
     'CF_test_pressure_main_valve_3.mf4'
 };
 
-% Correct maximum Excel rows for data (leave room for header)
-maxExcelRows = 1048575; % Excel .xlsx limit minus 1 for headers
+timeStepSeconds = 0.001; % <<<<<<<<<<<<<< Change precision here (e.g., 0.001 for 1 ms, 0.01 for 10 ms)
 
-% Loop over each file
+maxExcelRows = 1048575; % Excel .xlsx limit minus 1 row for headers
+
+% ----------------------------
+% Processing Loop
+% ----------------------------
+
 for i = 1:length(fileNames)
     
-    % Read the data (correct name-value syntax)
+    % Read the data
     dataChanExact = mdfRead(fileNames{i}, 'Channel', ["time", "Tank pressure ethanol", "Tank weight ethanol"]);
     
     % Extract the two timetables
@@ -24,6 +31,11 @@ for i = 1:length(fileNames)
     % Rename variables (optional but cleaner)
     mergedData.Properties.VariableNames = ["TankPressureEthanol", "TankWeightEthanol"];
     
+    % ----------------------------
+    % Downsample to reduce data
+    % ----------------------------
+    mergedData = retime(mergedData, 'regular', 'linear', 'TimeStep', seconds(timeStepSeconds));
+    
     % Add Time as a regular column
     mergedData.Time = mergedData.Properties.RowTimes;
     mergedData = movevars(mergedData, 'Time', 'Before', 1);
@@ -35,7 +47,9 @@ for i = 1:length(fileNames)
     [~, baseFileName, ~] = fileparts(fileNames{i});
     excelFileName = [baseFileName, '.xlsx'];
     
-    % How many rows total?
+    % ----------------------------
+    % Export to Excel, with splitting if needed
+    % ----------------------------
     numRows = height(mergedTable);
     
     if numRows <= maxExcelRows
@@ -45,12 +59,10 @@ for i = 1:length(fileNames)
         % If too big, split into multiple sheets
         numSheets = ceil(numRows / maxExcelRows);
         for s = 1:numSheets
-            % Define rows for this sheet
             idxStart = (s-1)*maxExcelRows + 1;
             idxEnd = min(s*maxExcelRows, numRows);
             subTable = mergedTable(idxStart:idxEnd, :);
             
-            % Write to sheet s
             writetable(subTable, excelFileName, 'Sheet', sprintf('Sheet%d', s));
         end
     end
